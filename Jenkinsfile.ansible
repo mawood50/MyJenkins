@@ -1,0 +1,62 @@
+pipeline {
+    agent any
+
+    options {
+        skipDefaultCheckout(true)
+        disableConcurrentBuilds()
+        timeout(time: 10, unit: 'MINUTES')
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Ansible preflight') {
+            steps {
+                dir('network') {
+                    sh '''
+                        set -eu
+                        export ANSIBLE_CONFIG="$PWD/ansible.cfg"
+
+                        /opt/jenkins-ansible/bin/ansible --version
+
+                        /opt/jenkins-ansible/bin/ansible-inventory \
+                          -i inventory/hosts.yml \
+                          --graph
+
+                        /opt/jenkins-ansible/bin/ansible-playbook \
+                          -i inventory/hosts.yml \
+                          playbooks/validate_aruba.yml \
+                          --syntax-check
+                    '''
+                }
+            }
+        }
+
+        stage('Validate remote Aruba switch') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: 'aruba-remote-login',
+                    usernameVariable: 'ARUBA_USERNAME',
+                    passwordVariable: 'ARUBA_PASSWORD'
+                )]) {
+                    dir('network') {
+                        sh '''
+                            set +x
+                            set -eu
+                            export ANSIBLE_CONFIG="$PWD/ansible.cfg"
+
+                            /opt/jenkins-ansible/bin/ansible-playbook \
+                              -i inventory/hosts.yml \
+                              playbooks/validate_aruba.yml \
+                              --limit aruba3810m
+                        '''
+                    }
+                }
+            }
+        }
+    }
+}
