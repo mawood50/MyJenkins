@@ -1,0 +1,20 @@
+---
+- name: Validate HP ProCurve and ArubaOS-Switch SSH
+ hosts: aruba_switches
+ gather_facts: false
+ tasks:
+ - name: Check that device credentials were provided
+ ansible.builtin.assert:
+ that:
+ - ansible_user | length > 0
+ - ansible_password | length > 0
+ fail_msg: Device username or password is missing
+ no_log: true
+ - name: Collect switch version
+ arubanetworks.aos_switch.arubaoss_command:
+ commands:
+ - show version
+ register: version_result
+ - name: Display version information
+ ansible.builtin.debug:
+ var: version_result.stdout_lines
